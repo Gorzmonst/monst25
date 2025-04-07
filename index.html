@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow"> <!-- 検索エンジンインデックス防止 -->
     <title>画像マッチングアプリ</title>
-    <script src="https://docs.opencv.org/4.10.0/opencv.js" onload="onOpenCvReady();" onerror="onOpenCvError();" defer></script> <!-- CDNから最新バージョン4.10.0を読み込む -->
+    <script src="./opencv.js" onload="onOpenCvReady();" onerror="onOpenCvError();" defer></script> <!-- ローカルファイルとして読み込む -->
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -89,21 +89,28 @@
 
         // OpenCV.jsが読み込まれたら実行
         function onOpenCvReady() {
-            cvReady = true;
-            console.log("OpenCV.js is ready");
-            alert("OpenCV.js が読み込まれました！バージョン: " + (cv && cv.getBuildInformation ? cv.getBuildInformation() : "不明")); // デバッグ用アラート
-            // cv.imread が利用可能か確認
-            if (typeof cv.imread === 'function') {
-                alert("cv.imread が利用可能です");
+            // OpenCV.jsの初期化を待つ
+            if (typeof cv !== 'undefined' && cv.onRuntimeInitialized) {
+                cv.onRuntimeInitialized = () => {
+                    cvReady = true;
+                    console.log("OpenCV.js is ready");
+                    alert("OpenCV.js が読み込まれました！バージョン: " + (cv.getBuildInformation ? cv.getBuildInformation() : "不明")); // デバッグ用アラート
+                    // cv.imread が利用可能か確認
+                    if (typeof cv.imread === 'function') {
+                        alert("cv.imread が利用可能です");
+                    } else {
+                        alert("cv.imread が利用できません。OpenCV.js のバージョンが正しく読み込まれていない可能性があります。");
+                    }
+                };
             } else {
-                alert("cv.imread が利用できません。OpenCV.js のバージョンが正しく読み込まれていない可能性があります。");
+                alert("OpenCV.js の初期化に失敗しました。cv.onRuntimeInitialized が定義されていません。");
             }
         }
 
         // OpenCV.jsの読み込みに失敗した場合
         function onOpenCvError() {
             console.log("OpenCV.js の読み込みに失敗しました");
-            alert("OpenCV.js の読み込みに失敗しました。CDNから正しく読み込めませんでした。ネットワーク接続を確認してください。");
+            alert("OpenCV.js の読み込みに失敗しました。ファイルが正しくアップロードされているか、パス（./opencv.js）が正しいか確認してください。");
         }
 
         // ページ読み込み時にデバッグログを追加
@@ -112,7 +119,7 @@
             alert("ページが読み込まれました。"); // デバッグ用アラート
             // OpenCV.js が読み込まれていない場合の確認
             if (typeof cv === 'undefined') {
-                alert("OpenCV.js の読み込みに失敗しました。CDNから正しく読み込めませんでした。");
+                alert("OpenCV.js の読み込みに失敗しました。ファイルが正しくアップロードされているか確認してください。");
             }
         };
 
