@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow"> <!-- 検索エンジンインデックス防止 -->
+    <title>画像マッチングアプリ</title>
+    <script src="opencv.js" onload="onOpenCvReady();" defer></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        canvas, img {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #ccc;
+        }
+        #result, #initialResult {
+            margin-top: 20px;
+            font-size: 18px;
+            white-space: pre-wrap;
+        }
+        .button-container {
+            margin: 10px 0;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+        }
+        input[type="number"] {
+            width: 80px;
+            padding: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>大魔王ぴよまる様の崇高なアプリ (Web版)</h1>
+
+    <div>
+        <label for="imageUpload">画像をアップロード:</label><br>
+        <input type="file" id="imageUpload" accept="image/*" onchange="loadImage(event)">
+    </div>
+
+    <div>
+        <label for="threshold">整合率 (0-1):</label><br>
+        <input type="number" id="threshold" step="0.001" min="0" max="1" value="0.965">
+        <div>
+            <button onclick="adjustThreshold(0.001)">▲</button>
+            <button onclick="adjustThreshold(-0.001)">▼</button>
+        </div>
+        <div class="button-container">
+            <button onclick="setThreshold(0.965)">0.965</button>
+            <button onclick="setThreshold(0.960)">0.960</button>
+            <button onclick="setThreshold(0.955)">0.955</button>
+            <button onclick="setThreshold(0.950)">0.950</button>
+            <button onclick="setThreshold(0.942)">0.942</button>
+        </div>
+    </div>
+
+    <div class="button-container">
+        <button onclick="checkImage()">画像チェック</button>
+        <button onclick="initialPositionCheck()">初期位置チェック</button>
+        <button onclick="saveImage()">画像を保存</button>
+    </div>
+
+    <canvas id="canvas"></canvas>
+    <div id="result">ここに結果が表示されます</div>
+    <div id="initialResult">ここに初期位置が表示されます</div>
+
+    <script>
+        // 簡易パスワード保護
+        const correctPassword = "kanatanpyonsu"; // パスワードを設定（任意に変更可能）
+        const password = prompt("パスワードを入力してください:");
+        if (password !== correctPassword) {
+            alert("パスワードが間違っています。");
+            window.location.href = "about:blank";
+        }
+
+        let cvReady = false;
+        let uploadedImage = null;
+        let coordinates = {};
+
+        // OpenCV.jsが読み込まれたら実行
+        function onOpenCvReady() {
+            cvReady = true;
+            console.log("OpenCV.js is ready");
+            alert("OpenCV.js が読み込まれました！"); // デバッグ用アラート
+        }
+
+        // ページ読み込み時にデバッグログを追加
+        window.onload = function() {
+            console.log("ページが読み込まれました");
+            alert("ページが読み込まれました。"); // デバッグ用アラート
+            // OpenCV.js が読み込まれていない場合の確認
+            if (typeof cv === 'undefined') {
+                alert("OpenCV.js の読み込みに失敗しました。");
+            }
+        };
+
+        // 画像を読み込む
+        function loadImage(event) {
+            console.log("loadImage が呼び出されました"); // デバッグ用
+            const file = event.target.files[0];
+            if (!file) {
+                console.log("ファイルが選択されていません");
+                alert("ファイルが選択されていません");
+                return;
+            }
+            const reader = new FileReader();
+
+            reader.onload = function(e) {
+                const img = new Image();
+                img.src = e.target.result;
+
+                img.onload = function() {
+                    uploadedImage = img;
+                    const canvas = document.getElementById('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    ctx.drawImage(img, 0, 0);
+                    console.log("画像がキャンバスに描画されました");
+                    alert("画像がアップロードされました"); // デバッグ用アラート
+                };
+                img.onerror = function() {
+                    console.log("画像の読み込みに失敗しました");
+                    alert("画像の読み込みに失敗しました");
+                };
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // 閾値を調整
+        function adjustThreshold(step) {
+            console.log("adjustThreshold が呼び出されました: ", step); // デバッグ用
+            const thresholdInput = document.getElementById('threshold');
+            let value = parseFloat(thresholdInput.value) + step;
+            value = Math.max(0, Math.min(1, value));
+            thresholdInput.value = value.toFixed(3);
+            console.log("新しい閾値: ", thresholdInput.value);
+        }
+
+        // 閾値を直接設定
+        function setThreshold(value) {
+            console.log("setThreshold が呼び出されました: ", value); // デバッグ用
+            document.getElementById('threshold').value = value;
+            console.log("新しい閾値: ", value);
+        }
+
+        // 画像チェック
+        function checkImage() {
+            console.log("checkImage が呼び出されました"); // デバッグ用
+            if (!cvReady || !uploadedImage) {
+                console.log("cvReady: ", cvReady, "uploadedImage: ", uploadedImage);
+                alert("画像をアップロードし、OpenCVが準備できるまでお待ちください。");
+                return;
+            }
+
+            const threshold = parseFloat(document.getElementById('threshold').value);
+            console.log("使用する閾値: ", threshold);
+            performTemplateMatching(threshold, false);
+        }
+
+        // 初期位置チェック
+        function initialPositionCheck() {
+            console.log("initialPositionCheck が呼び出されました"); // デバッグ用
+            if (!cvReady || !uploadedImage) {
+                console.log("cvReady: ", cvReady, "uploadedImage: ", uploadedImage);
+                alert("画像をアップロードし、OpenCVが準備できるまでお待ちください。");
+                return;
+            }
+            performTemplateMatching(0.965, true); // 固定閾値
+        }
+
+        // テンプレートマッチングの実行
+        function performTemplateMatching(threshold, isInitial) {
+            console.log("performTemplateMatching が呼び出されました: threshold=", threshold, "isInitial=", isInitial); // デバッグ用
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+            const src = cv.imread(canvas);
+            const gray = new cv.Mat();
+            cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+
+            // テンプレート画像（ローカルファイル）
+            const templateImg = new Image();
+            templateImg.src = '1v2new3.png'; // 同じディレクトリ内のテンプレート画像
+            templateImg.onload = function() {
+                console.log("テンプレート画像が読み込まれました"); // デバッグ用
+                const templateCanvas = document.createElement('canvas');
+                templateCanvas.width = templateImg.width;
+                templateCanvas.height = templateImg.height;
+                const templateCtx = templateCanvas.getContext('2d');
+                templateCtx.drawImage(templateImg, 0, 0);
+                const tpl = cv.imread(templateCanvas);
+                const tplGray = new cv.Mat();
+                cv.cvtColor(tpl, tplGray, cv.COLOR_RGBA2GRAY);
+
+                const result = new cv.Mat();
+                cv.matchTemplate(gray, tplGray, result, cv.TM_CCOEFF_NORMED);
+
+                const positions = [];
+                const minMax = cv.minMaxLoc(result);
+                let loc = new cv.Mat();
+                cv.threshold(result, loc, threshold, 1, cv.THRESH_BINARY);
+
+                const w = tpl.cols;
+                const h = tpl.rows;
+
+                for (let y = 0; y < loc.rows; y++) {
+                    for (let x = 0; x < loc.cols; x++) {
+                        if (loc.data[y * loc.cols + x] > 0) {
+                            positions.push([x + w / 2, y + h / 2]);
+                        }
+                    }
+                }
+
+                // 重複除去
+                const uniquePositions = removeDuplicates(positions);
+                console.log("検出された位置: ", uniquePositions); // デバッグ用
+
+                // 結果表示
+                if (isInitial) {
+                    displayInitialResults(uniquePositions);
+                } else {
+                    displayResults(uniquePositions);
+                }
+
+                // キャンバスにマーキング
+                markPositions(uniquePositions);
+
+                // リソース解放
+                src.delete();
+                gray.delete();
+                tpl.delete();
+                tplGray.delete();
+                result.delete();
+                loc.delete();
+            };
+            templateImg.onerror = function() {
+                console.log("テンプレート画像の読み込みに失敗しました");
+                alert("テンプレート画像 '1v2new3.png' の読み込みに失敗しました。同じフォルダに配置してください。");
+            };
+        }
+
+        // 重複除去
+        function removeDuplicates(positions) {
+            console.log("removeDuplicates が呼び出されました"); // デバッグ用
+            const minXDistance = 10;
+            const minYDistance = 10;
+            const unique = [];
+            for (const pos of positions) {
+                if (unique.every(p => Math.abs(p[0] - pos[0]) > minXDistance || Math.abs(p[1] - pos[1]) >= minYDistance)) {
+                    unique.push(pos);
+                }
+            }
+            return unique.slice(0, 4); // 最大4つまで
+        }
+
+        // 結果表示（通常チェック）
+        function displayResults(positions) {
+            console.log("displayResults が呼び出されました: ", positions); // デバッグ用
+            const resultDiv = document.getElementById('result');
+            coordinates = {};
+            if (positions.length > 0) {
+                const resultText = positions.map((pos, i) => `${i + 1}p : (${pos[0].toFixed(1)}, ${pos[1].toFixed(1)})`).join('\n');
+                resultDiv.textContent = resultText;
+                positions.forEach((pos, i) => coordinates[`${i + 1}P`] = pos);
+            } else {
+                resultDiv.textContent = "キャラクターが見つかりませんでした。";
+            }
+        }
+
+        // 初期位置結果表示（CSVデータは仮置き）
+        function displayInitialResults(positions) {
+            console.log("displayInitialResults が呼び出されました: ", positions); // デバッグ用
+            const initialResultDiv = document.getElementById('initialResult');
+            // 仮のCSVデータ
+            const csvData = {
+                '100,150': { initial_position: 'A', string_to_show: 'スタート地点' },
+                '200,300': { initial_position: 'B', string_to_show: '中間地点' }
+            };
+            if (positions.length > 0) {
+                const resultText = positions.map((pos, i) => {
+                    const key = `${Math.round(pos[0])},${Math.round(pos[1])}`;
+                    const data = csvData[key] || { initial_position: '', string_to_show: '不明' };
+                    return `${i + 1}p : ${data.initial_position} ${data.string_to_show}`;
+                }).join('\n');
+                initialResultDiv.textContent = resultText;
+            } else {
+                initialResultDiv.textContent = "キャラクターが見つかりませんでした。";
+            }
+        }
+
+        // 一致箇所をマーキング
+        function markPositions(positions) {
+            console.log("markPositions が呼び出されました: ", positions); // デバッグ用
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(uploadedImage, 0, 0); // 元画像を再描画
+            ctx.strokeStyle = 'red';
+            ctx.lineWidth = 2;
+            positions.forEach(pos => {
+                ctx.beginPath();
+                ctx.rect(pos[0] - 10, pos[1] - 10, 20, 20);
+                ctx.stroke();
+            });
+        }
+
+        // 画像保存
+        function saveImage() {
+            console.log("saveImage が呼び出されました"); // デバッグ用
+            const canvas = document.getElementById('canvas');
+            const link = document.createElement('a');
+            link.download = 'matched_image.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+    </script>
+</body>
+</html>
