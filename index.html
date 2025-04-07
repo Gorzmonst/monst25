@@ -5,7 +5,31 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow"> <!-- 検索エンジンインデックス防止 -->
     <title>画像マッチングアプリ</title>
-    <script src="./opencv.js" onload="onOpenCvReady();" onerror="onOpenCvError();" defer></script> <!-- ローカルファイル（4.11） -->
+    <script>
+        // OpenCV.js をローカルから読み込み、失敗した場合は CDN にフォールバック
+        function loadOpenCv() {
+            const script = document.createElement('script');
+            script.src = './opencv.js';
+            script.onload = function() {
+                onOpenCvReady();
+            };
+            script.onerror = function() {
+                console.log("ローカルの OpenCV.js の読み込みに失敗しました。CDN から読み込みます。");
+                alert("ローカルの OpenCV.js の読み込みに失敗しました。CDN から読み込みます。");
+                const fallbackScript = document.createElement('script');
+                fallbackScript.src = 'https://docs.opencv.org/4.5.5/opencv.js'; // 安定バージョン
+                fallbackScript.onload = function() {
+                    onOpenCvReady();
+                };
+                fallbackScript.onerror = function() {
+                    onOpenCvError();
+                };
+                document.head.appendChild(fallbackScript);
+            };
+            document.head.appendChild(script);
+        }
+        loadOpenCv();
+    </script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -107,7 +131,7 @@
         // OpenCV.jsの読み込みに失敗した場合
         function onOpenCvError() {
             console.log("OpenCV.js の読み込みに失敗しました");
-            alert("OpenCV.js の読み込みに失敗しました。ファイルが正しくアップロードされているか、パス（./opencv.js）が正しいか確認してください。");
+            alert("OpenCV.js の読み込みに失敗しました。ローカルファイル（./opencv.js）およびCDN（4.5.5）からの読み込みに失敗しました。ネットワーク接続を確認してください。");
         }
 
         // ページ読み込み時にデバッグログを追加
@@ -116,7 +140,7 @@
             alert("ページが読み込まれました。"); // デバッグ用アラート
             // OpenCV.js が読み込まれていない場合の確認
             if (typeof cv === 'undefined') {
-                alert("OpenCV.js の読み込みに失敗しました。ファイルが正しくアップロードされているか確認してください。");
+                alert("OpenCV.js の読み込みがまだ完了していません。しばらくお待ちください。");
             }
         };
 
