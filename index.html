@@ -12,6 +12,7 @@
             text-align: center;
             padding: 20px;
             background-color: #f0f0f0;
+            display: none; /* 初期状態で非表示 */
         }
         canvas, img {
             max-width: 100%;
@@ -68,12 +69,24 @@
 
     <script>
         // 簡易パスワード保護
-        const correctPassword = "kanatanpyonsu"; // パスワードを「kanatanpyonsu」に設定
-        const password = prompt("パスワードを入力してください:");
-        if (password !== correctPassword) {
-            alert("パスワードが間違っています。");
-            window.location.href = "about:blank";
-        }
+        (function() {
+            const correctPassword = "kanatanpyonsu"; // パスワードを「kanatanpyonsu」に設定
+            const password = prompt("パスワードを入力してください:");
+            console.log("入力されたパスワード: ", password); // デバッグ用
+
+            if (password !== correctPassword || password === null) {
+                console.log("パスワードが間違っています。リダイレクトします。");
+                alert("パスワードが間違っています。");
+                // リダイレクトを確実にするために window.location.replace を使用
+                window.location.replace("about:blank");
+                // リダイレクトが失敗した場合に備えて、ページの読み込みを停止
+                throw new Error("パスワード認証に失敗しました。ページの読み込みを停止します。");
+            } else {
+                console.log("パスワード認証に成功しました。ページを表示します。");
+                // パスワードが正しい場合、ページを表示
+                document.body.style.display = "block";
+            }
+        })();
 
         let pyodide = null;
         let pyodideReady = false;
@@ -273,6 +286,12 @@ try:
     # 中心座標に変換した結果を格納（浮動小数点で計算）
     final_result_centered = [(pt[0] + w / 2.0, pt[1] + h / 2.0) for pt in final_result_sorted]
 
+    # デバッグ用：元の左上座標もログに出力
+    if final_result_sorted:
+        log.append("元の左上座標（デバッグ用）:")
+        for pt in final_result_sorted:
+            log.append(f"X: {pt[0]}, Y: {pt[1]}")
+
     if final_result_sorted:
         log.append("✅ マッチ箇所が見つかりました（中心座標）:")
         if len(final_result_sorted) > 5:
@@ -357,7 +376,7 @@ except Exception as e:
                 initialResultDiv.textContent = resultText;
             } else {
                 initialResultDiv.textContent = "キャラクターが見つかりませんでした。";
-                alert("キャラクターが見つかりませんでした。\nテ 🙂ンプレート画像がアップロードした画像内に存在するか確認してください。");
+                alert("キャラクターが見つかりませんでした。\nテンプレート画像がアップロードした画像内に存在するか確認してください。");
             }
         }
     </script>
