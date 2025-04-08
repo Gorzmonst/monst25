@@ -344,7 +344,6 @@ except Exception as e:
         // 結果表示（通常チェック）
         function displayResults(positions) {
             console.log("displayResults が呼び出されました: ", positions); // デバッグ用
-            alert("結果表示: " + JSON.stringify(positions)); // デバッグ用アラート
             const resultDiv = document.getElementById('result');
             coordinates = {};
             if (positions.length > 0) {
@@ -360,7 +359,6 @@ except Exception as e:
         // 初期位置結果表示（CSVデータは仮置き）
         function displayInitialResults(positions) {
             console.log("displayInitialResults が呼び出されました: ", positions); // デバッグ用
-            alert("初期位置結果表示: " + JSON.stringify(positions)); // デバッグ用アラート
             const initialResultDiv = document.getElementById('initialResult');
             // 仮のCSVデータ
             const csvData = {
