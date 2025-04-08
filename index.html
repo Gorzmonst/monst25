@@ -1,126 +1,240 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <title>大魔王ぴよまる様の崇高なアプリ(WEB版)</title>
-  <script src="https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js"></script>
-  <style>
-    body { 
-      font-family: sans-serif; 
-      padding: 20px; 
-      text-align: center; 
-    }
-    pre { 
-      background: #f0f0f0; 
-      padding: 10px; 
-      white-space: pre-wrap; 
-      margin: 0 auto; 
-      max-width: 600px; 
-    }
-    img { 
-      max-width: 100%; 
-      margin-top: 10px; 
-    }
-    .container { 
-      display: flex; 
-      flex-direction: column; 
-      align-items: center; 
-      gap: 10px; 
-    }
-    #password-screen, #main-content { 
-      display: none; 
-    }
-    #password-screen.active, #main-content.active { 
-      display: block; 
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow"> <!-- 検索エンジンインデックス防止 -->
+    <title>画像マッチングアプリ</title>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.26.1/full/pyodide.js"></script> <!-- Pyodide 最新版 -->
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        canvas, img {
+            max-width: 100%;
+            height: auto;
+            border: 1px solid #ccc;
+        }
+        #result, #initialResult {
+            margin-top: 20px;
+            font-size: 18px;
+            white-space: pre-wrap;
+        }
+        .button-container {
+            margin: 10px 0;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+        }
+        input[type="number"] {
+            width: 80px;
+            padding: 5px;
+        }
+    </style>
 </head>
 <body>
-  <div id="password-screen" class="active">
-    <h1>パスワードを入力してください</h1>
-    <input type="password" id="password-input" placeholder="パスワード">
-    <button onclick="checkPassword()">送信</button>
-    <p id="password-error" style="color: red;"></p>
-  </div>
+    <h1>大魔王ぴよまる様の崇高なアプリ (Web版)</h1>
 
-  <div id="main-content" class="container">
-    <h1>大魔王ぴよまる様の崇高なアプリ(WEB版)</h1>
+    <div>
+        <label for="imageUpload">画像をアップロード:</label><br>
+        <input type="file" id="imageUpload" accept="image/*" onchange="loadImage(event)">
+    </div>
 
-    <label for="threshold">閾値 (0〜1):</label>
-    <input type="number" id="threshold" min="0" max="1" step="0.0001" value="0.9500"><br>
+    <div>
+        <label for="threshold">整合率 (0-1):</label><br>
+        <input type="number" id="threshold" step="0.001" min="0" max="1" value="0.965" readonly> <!-- 閾値は固定 -->
+        <div class="button-container">
+            <button onclick="alert('このアプリでは閾値は0.965に固定されています。')">0.965</button>
+        </div>
+    </div>
 
-    <label for="imageInput">対象画像 (.png, .jpg, .jpeg):</label>
-    <input type="file" id="imageInput" accept="image/*"><br>
+    <div class="button-container">
+        <button onclick="checkImage()">画像チェック</button>
+        <button onclick="initialPositionCheck()">初期位置チェック</button>
+    </div>
 
-    <button onclick="runMatching()">スタート</button>
+    <!-- 結果表示をキャンバスの上に配置 -->
+    <div id="result">ここに結果が表示されます</div>
+    <div id="initialResult">ここに初期位置が表示されます</div>
 
-    <h2>結果ログ:</h2>
-    <pre id="output">ここにログが表示されます</pre>
+    <canvas id="canvas"></canvas>
 
+    <!-- 結果画像を表示 -->
     <h2>マッチ結果画像:</h2>
     <img id="resultImage" src="" alt="マッチ結果がここに表示されます">
-  </div>
 
-  <script>
-    const CORRECT_PASSWORD = "kanatanpyonsu";
-    const TEMPLATE_URL = "https://raw.githubusercontent.com/Gorzmonst/monst25/main/1v2iPhone16_2.png"; // リポジトリに基づくURL
+    <script>
+        // 簡易パスワード保護
+        const correctPassword = "kanatanpyonsu"; // パスワードを「kanatanpyonsu」に設定
+        const password = prompt("パスワードを入力してください:");
+        if (password !== correctPassword) {
+            alert("パスワードが間違っています。");
+            window.location.href = "about:blank";
+        }
 
-    function checkPassword() {
-      const input = document.getElementById("password-input").value;
-      const errorEl = document.getElementById("password-error");
-      if (input === CORRECT_PASSWORD) {
-        document.getElementById("password-screen").classList.remove("active");
-        document.getElementById("main-content").classList.add("active");
-      } else {
-        errorEl.textContent = "パスワードが間違っています。";
-      }
-    }
+        let pyodide = null;
+        let pyodideReady = false;
+        let uploadedImage = null;
+        let coordinates = {};
+        let templateBytes = null;
 
-    let pyodide = null;
+        // Pyodide の初期化
+        async function loadPyodideAndPackages() {
+            try {
+                pyodide = await loadPyodide();
+                await pyodide.loadPackage(["opencv-python", "numpy"]);
+                pyodideReady = true;
+                console.log("Pyodide is ready");
+                alert("Pyodide が読み込まれました！");
 
-    async function loadPyodideAndPackages() {
-      pyodide = await loadPyodide();
-      await pyodide.loadPackage(["opencv-python", "numpy"]);
-    }
+                // テンプレート画像（1v2iphone16_2.png）を GitHub からフェッチ
+                const templateUrl = "https://raw.githubusercontent.com/gorzmonst/gorzmonst.github.io/main/1v2iphone16_2.png";
+                const response = await fetch(templateUrl);
+                if (!response.ok) {
+                    throw new Error("テンプレート画像（1v2iphone16_2.png）のフェッチに失敗しました: " + response.statusText);
+                }
+                const arrayBuffer = await response.arrayBuffer();
+                templateBytes = new Uint8Array(arrayBuffer);
+                console.log("テンプレート画像（1v2iphone16_2.png）がフェッチされました");
+                alert("テンプレート画像（1v2iphone16_2.png）がフェッチされました");
+            } catch (error) {
+                console.error("Pyodide またはテンプレート画像の読み込みに失敗しました: ", error);
+                alert("Pyodide またはテンプレート画像の読み込みに失敗しました: " + error.message);
+            }
+        }
 
-    loadPyodideAndPackages();
+        // ページ読み込み時に Pyodide を初期化
+        loadPyodideAndPackages();
 
-    async function runMatching() {
-      const threshold = parseFloat(document.getElementById("threshold").value);
-      const imageInput = document.getElementById("imageInput");
-      const outputEl = document.getElementById("output");
-      const imgEl = document.getElementById("resultImage");
+        // ページ読み込み時にデバッグログを追加
+        window.onload = function() {
+            console.log("ページが読み込まれました");
+            alert("ページが読み込まれました。"); // デバッグ用アラート
+        };
 
-      if (imageInput.files.length === 0) {
-        outputEl.textContent = "❗ 対象画像を選択してください。";
-        imgEl.src = "";
-        return;
-      }
+        // 画像を読み込む
+        function loadImage(event) {
+            console.log("loadImage が呼び出されました"); // デバッグ用
+            alert("loadImage が呼び出されました"); // デバッグ用アラート
+            const file = event.target.files[0];
+            if (!file) {
+                console.log("ファイルが選択されていません");
+                alert("ファイルが選択されていません");
+                return;
+            }
+            const reader = new FileReader();
 
-      if (isNaN(threshold) || threshold < 0 || threshold > 1) {
-        outputEl.textContent = "❗ 閾値は 0〜1 の間で入力してください。";
-        imgEl.src = "";
-        return;
-      }
+            reader.onload = function(e) {
+                const img = new Image();
+                img.src = e.target.result;
 
-      // テンプレート画像をGitHubからフェッチ
-      const templateResponse = await fetch(TEMPLATE_URL);
-      if (!templateResponse.ok) {
-        outputEl.textContent = "❌ テンプレート画像の読み込みに失敗しました。";
-        return;
-      }
-      const templateArrayBuffer = await templateResponse.arrayBuffer();
-      const templateBytes = new Uint8Array(templateArrayBuffer);
-      pyodide.FS.writeFile('template.png', templateBytes);
+                img.onload = function() {
+                    uploadedImage = img;
+                    const canvas = document.getElementById('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    ctx.drawImage(img, 0, 0);
+                    console.log("画像がキャンバスに描画されました");
+                    alert("画像がアップロードされました"); // デバッグ用アラート
+                };
+                img.onerror = function() {
+                    console.log("画像の読み込みに失敗しました");
+                    alert("画像の読み込みに失敗しました");
+                };
+            };
+            reader.readAsDataURL(file);
+        }
 
-      // アップロードされた画像を処理
-      const imageFile = imageInput.files[0];
-      const imageExt = imageFile.name.split('.').pop().toLowerCase();
-      const imageName = "uploaded." + imageExt;
-      const imageBytes = new Uint8Array(await imageFile.arrayBuffer());
-      pyodide.FS.writeFile(imageName, imageBytes);
+        // 画像チェック（Pyodide ベースのテンプレートマッチング）
+        async function checkImage() {
+            console.log("checkImage が呼び出されました"); // デバッグ用
+            alert("画像チェックが呼び出されました"); // デバッグ用アラート
+            if (!pyodideReady) {
+                console.log("pyodideReady: ", pyodideReady);
+                alert("Pyodide がまだ準備できていません。ページをリロードしてみてください。");
+                return;
+            }
+            if (!uploadedImage) {
+                console.log("uploadedImage: ", uploadedImage);
+                alert("画像をアップロードしてください。");
+                return;
+            }
+            if (!templateBytes) {
+                console.log("templateBytes: ", templateBytes);
+                alert("テンプレート画像（1v2iphone16_2.png）が読み込まれていません。ページをリロードしてみてください。");
+                return;
+            }
 
-      const pythonCode = `
+            try {
+                const positions = await runMatching(false);
+                console.log("検出された位置: ", positions); // デバッグ用
+                alert("検出された位置: " + JSON.stringify(positions)); // デバッグ用アラート
+
+                // 結果表示
+                displayResults(positions);
+            } catch (error) {
+                console.error("画像チェック中にエラーが発生しました: ", error);
+                alert("画像チェック中にエラーが発生しました: " + error.message + "\nスタック: " + error.stack);
+            }
+        }
+
+        // 初期位置チェック（Pyodide ベースのテンプレートマッチング）
+        async function initialPositionCheck() {
+            console.log("initialPositionCheck が呼び出されました"); // デバッグ用
+            alert("初期位置チェックが呼び出されました"); // デバッグ用アラート
+            if (!pyodideReady) {
+                console.log("pyodideReady: ", pyodideReady);
+                alert("Pyodide がまだ準備できていません。ページをリロードしてみてください。");
+                return;
+            }
+            if (!uploadedImage) {
+                console.log("uploadedImage: ", uploadedImage);
+                alert("画像をアップロードしてください。");
+                return;
+            }
+            if (!templateBytes) {
+                console.log("templateBytes: ", templateBytes);
+                alert("テンプレート画像（1v2iphone16_2.png）が読み込まれていません。ページをリロードしてみてください。");
+                return;
+            }
+
+            try {
+                const positions = await runMatching(true);
+                console.log("検出された位置: ", positions); // デバッグ用
+                alert("検出された位置: " + JSON.stringify(positions)); // デバッグ用アラート
+
+                // 結果表示
+                displayInitialResults(positions);
+            } catch (error) {
+                console.error("初期位置チェック中にエラーが発生しました: ", error);
+                alert("初期位置チェック中にエラーが発生しました: " + error.message + "\nスタック: " + error.stack);
+            }
+        }
+
+        // Pyodide ベースのテンプレートマッチング
+        async function runMatching(isInitial) {
+            const threshold = 0.965; // 閾値を固定
+            const imageInput = document.getElementById("imageUpload");
+            const imgEl = document.getElementById("resultImage");
+
+            if (imageInput.files.length === 0) {
+                throw new Error("対象画像を選択してください。");
+            }
+
+            const imageFile = imageInput.files[0];
+            const imageExt = imageFile.name.split('.').pop().toLowerCase();
+            const imageName = "uploaded." + imageExt;
+
+            const imageBytes = new Uint8Array(await imageFile.arrayBuffer());
+            pyodide.FS.writeFile('template.png', templateBytes); // テンプレート画像（1v2iphone16_2.png）
+            pyodide.FS.writeFile(imageName, imageBytes);
+
+            const pythonCode = `
 import cv2
 import numpy as np
 import base64
@@ -162,12 +276,9 @@ try:
             log.append("⚠️ マッチ箇所が多すぎます。閾値を調整するか、範囲を狭めてください。")
         h, w = template.shape
         for pt in final_result_sorted:
-            log.append(f"マッチ箇所 左上座標: X: {pt[0]}, Y: {pt[1]}")
-            center_x = pt[0] + w // 2
-            center_y = pt[1] + h // 2
-            log.append(f"マッチ箇所 中心座標: X: {center_x}, Y: {center_y}")
+            log.append(f"X: {pt[0]}, Y: {pt[1]}")
             cv2.rectangle(img_color, pt, (pt[0] + w, pt[1] + h), (0, 0, 255), 2)
-            cv2.circle(img_color, (center_x, center_y), 10, (0, 255, 0), 2)
+            cv2.circle(img_color, (pt[0] + w // 2, pt[1] + h // 2), 10, (0, 255, 0), 2)
     else:
         log.append("⚠️ マッチなし")
 
@@ -181,24 +292,69 @@ except Exception as e:
     log.append("❌ エラー: " + str(e))
     img_base64 = ""
 
-"\\n".join(log) + "\\n__SPLIT__\\n" + img_base64
+"\\n".join(log) + "\\n__SPLIT__\\n" + img_base64 + "\\n__SPLIT__\\n" + str(final_result_sorted)
 `;
 
-      try {
-        const result = await pyodide.runPythonAsync(pythonCode);
-        const [logText, imgBase64] = result.split("__SPLIT__");
-        outputEl.textContent = logText;
-        if (imgBase64) {
-          imgEl.src = "data:image/png;base64," + imgBase64;
-        } else {
-          imgEl.src = "";
+            try {
+                const result = await pyodide.runPythonAsync(pythonCode);
+                const [logText, imgBase64, positionsStr] = result.split("__SPLIT__");
+                console.log("Pyodide ログ: ", logText);
+                alert("Pyodide ログ:\n" + logText);
+
+                // 結果画像を表示
+                if (imgBase64) {
+                    imgEl.src = "data:image/png;base64," + imgBase64;
+                } else {
+                    imgEl.src = "";
+                }
+
+                // 位置情報をパース
+                const positions = JSON.parse(positionsStr).map(pt => [pt[0] + templateBytes.length / 2, pt[1] + templateBytes.length / 2]); // 中心位置を調整
+                return positions;
+            } catch (err) {
+                console.error("Pyodide 実行エラー: ", err);
+                throw new Error("Pyodide 実行エラー:\n" + err);
+            }
         }
-      } catch (err) {
-        outputEl.textContent = "❌ Pyodide 実行エラー:\n" + err;
-        imgEl.src = "";
-        console.error(err);
-      }
-    }
-  </script>
+
+        // 結果表示（通常チェック）
+        function displayResults(positions) {
+            console.log("displayResults が呼び出されました: ", positions); // デバッグ用
+            alert("結果表示: " + JSON.stringify(positions)); // デバッグ用アラート
+            const resultDiv = document.getElementById('result');
+            coordinates = {};
+            if (positions.length > 0) {
+                const resultText = positions.map((pos, i) => `${i + 1}p : (${pos[0].toFixed(1)}, ${pos[1].toFixed(1)})`).join('\n');
+                resultDiv.textContent = resultText;
+                positions.forEach((pos, i) => coordinates[`${i + 1}P`] = pos);
+            } else {
+                resultDiv.textContent = "キャラクターが見つかりませんでした。";
+                alert("キャラクターが見つかりませんでした。\nテンプレート画像（1v2iphone16_2.png）がアップロードした画像内に存在するか確認してください。");
+            }
+        }
+
+        // 初期位置結果表示（CSVデータは仮置き）
+        function displayInitialResults(positions) {
+            console.log("displayInitialResults が呼び出されました: ", positions); // デバッグ用
+            alert("初期位置結果表示: " + JSON.stringify(positions)); // デバッグ用アラート
+            const initialResultDiv = document.getElementById('initialResult');
+            // 仮のCSVデータ
+            const csvData = {
+                '100,150': { initial_position: 'A', string_to_show: 'スタート地点' },
+                '200,300': { initial_position: 'B', string_to_show: '中間地点' }
+            };
+            if (positions.length > 0) {
+                const resultText = positions.map((pos, i) => {
+                    const key = `${Math.round(pos[0])},${Math.round(pos[1])}`;
+                    const data = csvData[key] || { initial_position: '', string_to_show: '不明' };
+                    return `${i + 1}p : ${data.initial_position} ${data.string_to_show}`;
+                }).join('\n');
+                initialResultDiv.textContent = resultText;
+            } else {
+                initialResultDiv.textContent = "キャラクターが見つかりませんでした。";
+                alert("キャラクターが見つかりませんでした。\nテンプレート画像（1v2iphone16_2.png）がアップロードした画像内に存在するか確認してください。");
+            }
+        }
+    </script>
 </body>
 </html>
