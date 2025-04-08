@@ -1,396 +1,204 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="robots" content="noindex, nofollow"> <!-- 検索エンジンインデックス防止 -->
-    <title>画像マッチングアプリ</title>
-    <script>
-        // OpenCV.js をローカルから読み込み、失敗した場合は CDN にフォールバック
-        function loadOpenCv() {
-            const script = document.createElement('script');
-            script.src = './opencv.js';
-            script.onload = function() {
-                onOpenCvReady();
-            };
-            script.onerror = function() {
-                console.log("ローカルの OpenCV.js の読み込みに失敗しました。CDN から読み込みます。");
-                alert("ローカルの OpenCV.js の読み込みに失敗しました。CDN から読み込みます。");
-                const fallbackScript = document.createElement('script');
-                fallbackScript.src = 'https://docs.opencv.org/4.5.5/opencv.js'; // 安定バージョン
-                fallbackScript.onload = function() {
-                    onOpenCvReady();
-                };
-                fallbackScript.onerror = function() {
-                    onOpenCvError();
-                };
-                document.head.appendChild(fallbackScript);
-            };
-            document.head.appendChild(script);
-        }
-        loadOpenCv();
-    </script>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            text-align: center;
-            padding: 20px;
-            background-color: #f0f0f0;
-        }
-        canvas, img {
-            max-width: 100%;
-            height: auto;
-            border: 1px solid #ccc;
-        }
-        #result, #initialResult {
-            margin-top: 20px;
-            font-size: 18px;
-            white-space: pre-wrap;
-        }
-        .button-container {
-            margin: 10px 0;
-        }
-        button {
-            padding: 10px 20px;
-            margin: 5px;
-        }
-        input[type="number"] {
-            width: 80px;
-            padding: 5px;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <title>大魔王ぴよまる様の崇高なアプリ(WEB版)</title>
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js"></script>
+  <style>
+    body { 
+      font-family: sans-serif; 
+      padding: 20px; 
+      text-align: center; 
+    }
+    pre { 
+      background: #f0f0f0; 
+      padding: 10px; 
+      white-space: pre-wrap; 
+      margin: 0 auto; 
+      max-width: 600px; 
+    }
+    img { 
+      max-width: 100%; 
+      margin-top: 10px; 
+    }
+    .container { 
+      display: flex; 
+      flex-direction: column; 
+      align-items: center; 
+      gap: 10px; 
+    }
+    #password-screen, #main-content { 
+      display: none; 
+    }
+    #password-screen.active, #main-content.active { 
+      display: block; 
+    }
+  </style>
 </head>
 <body>
-    <h1>大魔王ぴよまる様の崇高なアプリ (Web版)</h1>
+  <div id="password-screen" class="active">
+    <h1>パスワードを入力してください</h1>
+    <input type="password" id="password-input" placeholder="パスワード">
+    <button onclick="checkPassword()">送信</button>
+    <p id="password-error" style="color: red;"></p>
+  </div>
 
-    <div>
-        <label for="imageUpload">画像をアップロード:</label><br>
-        <input type="file" id="imageUpload" accept="image/*" onchange="loadImage(event)">
-    </div>
+  <div id="main-content" class="container">
+    <h1>大魔王ぴよまる様の崇高なアプリ(WEB版)</h1>
 
-    <div>
-        <label for="threshold">整合率 (0-1):</label><br>
-        <input type="number" id="threshold" step="0.001" min="0" max="1" value="0.965" readonly> <!-- 閾値は固定 -->
-        <div class="button-container">
-            <button onclick="alert('このアプリでは閾値は0.965に固定されています。')">0.965</button>
-        </div>
-    </div>
+    <label for="threshold">閾値 (0〜1):</label>
+    <input type="number" id="threshold" min="0" max="1" step="0.0001" value="0.9500"><br>
 
-    <div class="button-container">
-        <button onclick="checkImage()">画像チェック</button>
-        <button onclick="initialPositionCheck()">初期位置チェック</button>
-    </div>
+    <label for="imageInput">対象画像 (.png, .jpg, .jpeg):</label>
+    <input type="file" id="imageInput" accept="image/*"><br>
 
-    <!-- 結果表示をキャンバスの上に配置 -->
-    <div id="result">ここに結果が表示されます</div>
-    <div id="initialResult">ここに初期位置が表示されます</div>
+    <button onclick="runMatching()">スタート</button>
 
-    <canvas id="canvas"></canvas>
+    <h2>結果ログ:</h2>
+    <pre id="output">ここにログが表示されます</pre>
 
-    <script>
-        // 簡易パスワード保護
-        const correctPassword = "kanatanpyonsu"; // パスワードを「kanatanpyonsu」に設定
-        const password = prompt("パスワードを入力してください:");
-        if (password !== correctPassword) {
-            alert("パスワードが間違っています。");
-            window.location.href = "about:blank";
+    <h2>マッチ結果画像:</h2>
+    <img id="resultImage" src="" alt="マッチ結果がここに表示されます">
+  </div>
+
+  <script>
+    const CORRECT_PASSWORD = "kanatanpyonsu";
+    const TEMPLATE_URL = "https://raw.githubusercontent.com/Gorzmonst/monst25/main/1v2iPhone16_2.png"; // リポジトリに基づくURL
+
+    function checkPassword() {
+      const input = document.getElementById("password-input").value;
+      const errorEl = document.getElementById("password-error");
+      if (input === CORRECT_PASSWORD) {
+        document.getElementById("password-screen").classList.remove("active");
+        document.getElementById("main-content").classList.add("active");
+      } else {
+        errorEl.textContent = "パスワードが間違っています。";
+      }
+    }
+
+    let pyodide = null;
+
+    async function loadPyodideAndPackages() {
+      pyodide = await loadPyodide();
+      await pyodide.loadPackage(["opencv-python", "numpy"]);
+    }
+
+    loadPyodideAndPackages();
+
+    async function runMatching() {
+      const threshold = parseFloat(document.getElementById("threshold").value);
+      const imageInput = document.getElementById("imageInput");
+      const outputEl = document.getElementById("output");
+      const imgEl = document.getElementById("resultImage");
+
+      if (imageInput.files.length === 0) {
+        outputEl.textContent = "❗ 対象画像を選択してください。";
+        imgEl.src = "";
+        return;
+      }
+
+      if (isNaN(threshold) || threshold < 0 || threshold > 1) {
+        outputEl.textContent = "❗ 閾値は 0〜1 の間で入力してください。";
+        imgEl.src = "";
+        return;
+      }
+
+      // テンプレート画像をGitHubからフェッチ
+      const templateResponse = await fetch(TEMPLATE_URL);
+      if (!templateResponse.ok) {
+        outputEl.textContent = "❌ テンプレート画像の読み込みに失敗しました。";
+        return;
+      }
+      const templateArrayBuffer = await templateResponse.arrayBuffer();
+      const templateBytes = new Uint8Array(templateArrayBuffer);
+      pyodide.FS.writeFile('template.png', templateBytes);
+
+      // アップロードされた画像を処理
+      const imageFile = imageInput.files[0];
+      const imageExt = imageFile.name.split('.').pop().toLowerCase();
+      const imageName = "uploaded." + imageExt;
+      const imageBytes = new Uint8Array(await imageFile.arrayBuffer());
+      pyodide.FS.writeFile(imageName, imageBytes);
+
+      const pythonCode = `
+import cv2
+import numpy as np
+import base64
+
+log = []
+try:
+    log.append("🔹 template 読み込み中...")
+    template = cv2.imread("template.png", 0)
+    if template is None:
+        raise Exception("テンプレート画像の読み込みに失敗")
+
+    log.append("🔹 対象画像 読み込み中...")
+    img_color = cv2.imread("${imageName}")
+    img_gray = cv2.cvtColor(img_color, cv2.COLOR_BGR2GRAY)
+
+    log.append("🔹 テンプレートマッチング実行中...")
+    res = cv2.matchTemplate(img_gray, template, cv2.TM_CCOEFF_NORMED)
+    log.append("🔹 閾値 ${threshold} 以上を抽出中...")
+    loc = np.where(res >= ${threshold})
+    result = list(zip(*loc[::-1]))
+
+    min_distance = 10
+    final_result = []
+    for pt in result:
+        add = True
+        for other_pt in final_result:
+            dist = np.linalg.norm(np.array(pt) - np.array(other_pt))
+            if dist < min_distance:
+                add = False
+                break
+        if add:
+            final_result.append(pt)
+
+    final_result_sorted = sorted(final_result, key=lambda x: x[0])
+
+    if final_result_sorted:
+        log.append("✅ マッチ箇所が見つかりました:")
+        if len(final_result_sorted) > 5:
+            log.append("⚠️ マッチ箇所が多すぎます。閾値を調整するか、範囲を狭めてください。")
+        h, w = template.shape
+        for pt in final_result_sorted:
+            log.append(f"マッチ箇所 左上座標: X: {pt[0]}, Y: {pt[1]}")
+            center_x = pt[0] + w // 2
+            center_y = pt[1] + h // 2
+            log.append(f"マッチ箇所 中心座標: X: {center_x}, Y: {center_y}")
+            cv2.rectangle(img_color, pt, (pt[0] + w, pt[1] + h), (0, 0, 255), 2)
+            cv2.circle(img_color, (center_x, center_y), 10, (0, 255, 0), 2)
+    else:
+        log.append("⚠️ マッチなし")
+
+    cv2.imwrite("result.png", img_color)
+
+    with open("result.png", "rb") as f:
+        img_bytes = f.read()
+    img_base64 = base64.b64encode(img_bytes).decode("utf-8")
+
+except Exception as e:
+    log.append("❌ エラー: " + str(e))
+    img_base64 = ""
+
+"\\n".join(log) + "\\n__SPLIT__\\n" + img_base64
+`;
+
+      try {
+        const result = await pyodide.runPythonAsync(pythonCode);
+        const [logText, imgBase64] = result.split("__SPLIT__");
+        outputEl.textContent = logText;
+        if (imgBase64) {
+          imgEl.src = "data:image/png;base64," + imgBase64;
+        } else {
+          imgEl.src = "";
         }
-
-        let cvReady = false;
-        let uploadedImage = null;
-        let templateImg = null;
-        let coordinates = {};
-
-        // OpenCV.jsが読み込まれたら実行
-        function onOpenCvReady() {
-            // OpenCV.jsの初期化を待つ
-            if (typeof cv !== 'undefined' && cv.onRuntimeInitialized) {
-                cv.onRuntimeInitialized = () => {
-                    cvReady = true;
-                    console.log("OpenCV.js is ready");
-                    alert("OpenCV.js が読み込まれました！バージョン: " + (cv.getBuildInformation ? cv.getBuildInformation() : "不明")); // デバッグ用アラート
-                    // cv.imread が利用可能か確認
-                    if (typeof cv.imread === 'function') {
-                        alert("cv.imread が利用可能です");
-                    } else {
-                        alert("cv.imread が利用できません。OpenCV.js のバージョンが正しく読み込まれていない可能性があります。");
-                    }
-                    // テンプレート画像を事前に読み込む
-                    loadTemplateImage('./1v2new3.png').then(img => {
-                        templateImg = img;
-                        alert("テンプレート画像（1v2new3.png）が事前に読み込まれました");
-                    }).catch(error => {
-                        alert("テンプレート画像（1v2new3.png）の事前読み込みに失敗しました: " + error.message);
-                    });
-                };
-            } else {
-                alert("OpenCV.js の初期化に失敗しました。cv.onRuntimeInitialized が定義されていません。");
-            }
-        }
-
-        // OpenCV.jsの読み込みに失敗した場合
-        function onOpenCvError() {
-            console.log("OpenCV.js の読み込みに失敗しました");
-            alert("OpenCV.js の読み込みに失敗しました。ローカルファイル（./opencv.js）およびCDN（4.5.5）からの読み込みに失敗しました。ネットワーク接続を確認してください。");
-        }
-
-        // ページ読み込み時にデバッグログを追加
-        window.onload = function() {
-            console.log("ページが読み込まれました");
-            alert("ページが読み込まれました。"); // デバッグ用アラート
-            // OpenCV.js が読み込まれていない場合の確認
-            if (typeof cv === 'undefined') {
-                alert("OpenCV.js の読み込みがまだ完了していません。しばらくお待ちください。");
-            }
-        };
-
-        // 画像を読み込む
-        function loadImage(event) {
-            console.log("loadImage が呼び出されました"); // デバッグ用
-            alert("loadImage が呼び出されました"); // デバッグ用アラート
-            const file = event.target.files[0];
-            if (!file) {
-                console.log("ファイルが選択されていません");
-                alert("ファイルが選択されていません");
-                return;
-            }
-            const reader = new FileReader();
-
-            reader.onload = function(e) {
-                const img = new Image();
-                img.src = e.target.result;
-
-                img.onload = function() {
-                    uploadedImage = img;
-                    const canvas = document.getElementById('canvas');
-                    const ctx = canvas.getContext('2d');
-                    canvas.width = img.width;
-                    canvas.height = img.height;
-                    ctx.drawImage(img, 0, 0);
-                    console.log("画像がキャンバスに描画されました");
-                    alert("画像がアップロードされました"); // デバッグ用アラート
-                };
-                img.onerror = function() {
-                    console.log("画像の読み込みに失敗しました");
-                    alert("画像の読み込みに失敗しました");
-                };
-            };
-            reader.readAsDataURL(file);
-        }
-
-        // テンプレート画像を非同期で読み込む関数
-        function loadTemplateImage(src) {
-            return new Promise((resolve, reject) => {
-                const img = new Image();
-                img.src = src;
-                img.onload = () => {
-                    console.log("テンプレート画像が読み込まれました: ", src); // デバッグ用
-                    resolve(img);
-                };
-                img.onerror = () => {
-                    const errorMsg = `テンプレート画像 '${src}' の読み込みに失敗しました。GitHub Pagesに正しくアップロードされているか、ファイルパスが正しいか確認してください。`;
-                    console.log(errorMsg);
-                    reject(new Error(errorMsg));
-                };
-            });
-        }
-
-        // 元の imgCheck 関数を忠実に再現
-        function imgCheck() {
-            // キャンバスから画像データを取得（screencap() の代わり）
-            const canvas = document.getElementById('canvas');
-            const src = cv.imread(canvas);
-
-            // グレースケール変換
-            const gray = new cv.Mat();
-            cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-
-            // テンプレート画像を読み込み（path+"1v2.png" の代わり）
-            const templateCanvas = document.createElement('canvas');
-            templateCanvas.width = templateImg.width;
-            templateCanvas.height = templateImg.height;
-            const templateCtx = templateCanvas.getContext('2d');
-            templateCtx.drawImage(templateImg, 0, 0);
-            const tpl = cv.imread(templateCanvas);
-
-            // テンプレート画像の幅と高さを取得（tpl.shape[::-1] の代わり）
-            const w = tpl.cols;
-            const h = tpl.rows;
-
-            // テンプレートマッチング
-            const res = new cv.Mat();
-            cv.matchTemplate(gray, tpl, res, cv.TM_CCOEFF_NORMED);
-
-            // デバッグ: マッチング結果のスコアを確認
-            const minMax = cv.minMaxLoc(res);
-            console.log("minMax: ", minMax);
-            alert("マッチング結果: minVal=" + minMax.minVal + ", maxVal=" + minMax.maxVal + "\n閾値: 0.965\nTM_CCOEFF_NORMEDではmaxValが高いほど良いマッチです。");
-
-            // 閾値 0.965 以上の位置を抽出（np.where(res > 0.965) の代わり）
-            const loc = new cv.Mat();
-            cv.threshold(res, loc, 0.965, 1, cv.THRESH_BINARY);
-
-            // 位置を収集（zip(*loc[::-1]) の代わり）
-            let position = [];
-            for (let y = 0; y < loc.rows; y++) {
-                for (let x = 0; x < loc.cols; x++) {
-                    if (loc.data[y * loc.cols + x] > 0) {
-                        position.push([x + w / 2, y + h / 2]);
-                    }
-                }
-            }
-
-            // position を x 座標でソート（position.sort(key=lambda x:x[0]) の代わり）
-            position.sort((a, b) => a[0] - b[0]);
-
-            // 重複除去（10ピクセル以上の差がある位置のみを保持）
-            let result = [];
-            for (let i = 0; i < position.length; i++) {
-                if (i !== 0) {
-                    if (Math.abs(position[i][0] - position[i - 1][0]) > 10) {
-                        result.push([position[i][0], position[i][1]]);
-                    }
-                } else {
-                    result.push([position[i][0], position[i][1]]);
-                }
-            }
-
-            // リソース解放
-            src.delete();
-            gray.delete();
-            tpl.delete();
-            res.delete();
-            loc.delete();
-
-            return result;
-        }
-
-        // 画像チェック
-        async function checkImage() {
-            console.log("checkImage が呼び出されました"); // デバッグ用
-            alert("画像チェックが呼び出されました"); // デバッグ用アラート
-            if (!cvReady) {
-                console.log("cvReady: ", cvReady);
-                alert("OpenCV.js がまだ準備できていません。ページをリロードしてみてください。");
-                return;
-            }
-            if (!uploadedImage) {
-                console.log("uploadedImage: ", uploadedImage);
-                alert("画像をアップロードしてください。");
-                return;
-            }
-            if (!templateImg) {
-                console.log("templateImg: ", templateImg);
-                alert("テンプレート画像（1v2new3.png）が読み込まれていません。ページをリロードしてみてください。");
-                return;
-            }
-
-            try {
-                const positions = imgCheck();
-                console.log("検出された位置: ", positions); // デバッグ用
-                alert("検出された位置: " + JSON.stringify(positions)); // デバッグ用アラート
-
-                // 結果表示
-                displayResults(positions);
-
-                // キャンバスにマーキング
-                markPositions(positions);
-            } catch (error) {
-                console.error("画像チェック中にエラーが発生しました: ", error);
-                alert("画像チェック中にエラーが発生しました: " + error.message + "\nスタック: " + error.stack);
-            }
-        }
-
-        // 初期位置チェック
-        async function initialPositionCheck() {
-            console.log("initialPositionCheck が呼び出されました"); // デバッグ用
-            alert("初期位置チェックが呼び出されました"); // デバッグ用アラート
-            if (!cvReady) {
-                console.log("cvReady: ", cvReady);
-                alert("OpenCV.js がまだ準備できていません。ページをリロードしてみてください。");
-                return;
-            }
-            if (!uploadedImage) {
-                console.log("uploadedImage: ", uploadedImage);
-                alert("画像をアップロードしてください。");
-                return;
-            }
-            if (!templateImg) {
-                console.log("templateImg: ", templateImg);
-                alert("テンプレート画像（1v2new3.png）が読み込まれていません。ページをリロードしてみてください。");
-                return;
-            }
-
-            try {
-                const positions = imgCheck();
-                console.log("検出された位置: ", positions); // デバッグ用
-                alert("検出された位置: " + JSON.stringify(positions)); // デバッグ用アラート
-
-                // 結果表示
-                displayInitialResults(positions);
-
-                // キャンバスにマーキング
-                markPositions(positions);
-            } catch (error) {
-                console.error("初期位置チェック中にエラーが発生しました: ", error);
-                alert("初期位置チェック中にエラーが発生しました: " + error.message + "\nスタック: " + error.stack);
-            }
-        }
-
-        // 結果表示（通常チェック）
-        function displayResults(positions) {
-            console.log("displayResults が呼び出されました: ", positions); // デバッグ用
-            alert("結果表示: " + JSON.stringify(positions)); // デバッグ用アラート
-            const resultDiv = document.getElementById('result');
-            coordinates = {};
-            if (positions.length > 0) {
-                const resultText = positions.map((pos, i) => `${i + 1}p : (${pos[0].toFixed(1)}, ${pos[1].toFixed(1)})`).join('\n');
-                resultDiv.textContent = resultText;
-                positions.forEach((pos, i) => coordinates[`${i + 1}P`] = pos);
-            } else {
-                resultDiv.textContent = "キャラクターが見つかりませんでした。";
-                alert("キャラクターが見つかりませんでした。\nマッチングスコアを確認し、テンプレート画像（1v2new3.png）がアップロードした画像内に存在するか確認してください。");
-            }
-        }
-
-        // 初期位置結果表示（CSVデータは仮置き）
-        function displayInitialResults(positions) {
-            console.log("displayInitialResults が呼び出されました: ", positions); // デバッグ用
-            alert("初期位置結果表示: " + JSON.stringify(positions)); // デバッグ用アラート
-            const initialResultDiv = document.getElementById('initialResult');
-            // 仮のCSVデータ
-            const csvData = {
-                '100,150': { initial_position: 'A', string_to_show: 'スタート地点' },
-                '200,300': { initial_position: 'B', string_to_show: '中間地点' }
-            };
-            if (positions.length > 0) {
-                const resultText = positions.map((pos, i) => {
-                    const key = `${Math.round(pos[0])},${Math.round(pos[1])}`;
-                    const data = csvData[key] || { initial_position: '', string_to_show: '不明' };
-                    return `${i + 1}p : ${data.initial_position} ${data.string_to_show}`;
-                }).join('\n');
-                initialResultDiv.textContent = resultText;
-            } else {
-                initialResultDiv.textContent = "キャラクターが見つかりませんでした。";
-                alert("キャラクターが見つかりませんでした。\nマッチングスコアを確認し、テンプレート画像（1v2new3.png）がアップロードした画像内に存在するか確認してください。");
-            }
-        }
-
-        // 一致箇所をマーキング
-        function markPositions(positions) {
-            console.log("markPositions が呼び出されました: ", positions); // デバッグ用
-            alert("一致箇所をマーキングします: " + JSON.stringify(positions)); // デバッグ用アラート
-            const canvas = document.getElementById('canvas');
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(uploadedImage, 0, 0); // 元画像を再描画
-            ctx.strokeStyle = 'red';
-            ctx.lineWidth = 2;
-            positions.forEach(pos => {
-                ctx.beginPath();
-                ctx.rect(pos[0] - 10, pos[1] - 10, 20, 20);
-                ctx.stroke();
-            });
-        }
-    </script>
+      } catch (err) {
+        outputEl.textContent = "❌ Pyodide 実行エラー:\n" + err;
+        imgEl.src = "";
+        console.error(err);
+      }
+    }
+  </script>
 </body>
 </html>
