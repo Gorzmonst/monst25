@@ -269,8 +269,8 @@ try:
     h, w = template.shape
     log.append(f"テンプレート画像のサイズ: 幅={w}, 高さ={h}")
 
-    # 中心座標に変換（ピクセル中心を補正）
-    final_result_centered = [(pt[0] + w / 2.0, pt[1] + h / 2.0 + 0.5) for pt in final_result_sorted]
+    # 中心座標に変換（補正なしで計算）
+    final_result_centered = [(pt[0] + w / 2.0, pt[1] + h / 2.0) for pt in final_result_sorted]
 
     if final_result_sorted:
         log.append("✅ マッチ箇所が見つかりました（中心座標）:")
@@ -337,9 +337,12 @@ positions_json = json.dumps(final_result_centered)
             const resultDiv = document.getElementById('result');
             coordinates = {};
             if (positions && positions.length > 0) {
-                const resultText = positions.map((pos, i) => `${i + 1}p : (${pos[0].toFixed(1)}, ${pos[1].toFixed(1)})`).join('\n');
+                // 座標を整数に丸めて表示
+                const resultText = positions.map((pos, i) => 
+                    `${i + 1}p : (${Math.round(pos[0])}, ${Math.round(pos[1])})`
+                ).join('\n');
                 resultDiv.textContent = resultText;
-                positions.forEach((pos, i) => coordinates[`${i + 1}P`] = pos);
+                positions.forEach((pos, i) => coordinates[`${i + 1}P`] = [Math.round(pos[0]), Math.round(pos[1])]);
                 console.log("結果が表示されました: ", resultText);
             } else {
                 resultDiv.textContent = "キャラクターが見つかりませんでした。";
