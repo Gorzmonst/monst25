@@ -268,9 +268,10 @@ try:
 
     # テンプレート画像のサイズを取得
     h, w = template.shape
+    log.append(f"テンプレート画像のサイズ: 幅={w}, 高さ={h}")
 
-    # 中心座標に変換した結果を格納
-    final_result_centered = [(pt[0] + w // 2, pt[1] + h // 2) for pt in final_result_sorted]
+    # 中心座標に変換した結果を格納（浮動小数点で計算）
+    final_result_centered = [(pt[0] + w / 2.0, pt[1] + h / 2.0) for pt in final_result_sorted]
 
     if final_result_sorted:
         log.append("✅ マッチ箇所が見つかりました（中心座標）:")
@@ -278,10 +279,11 @@ try:
             log.append("⚠️ マッチ箇所が多すぎます。閾値を調整するか、範囲を狭めてください。")
         for pt in final_result_centered:
             log.append(f"X: {pt[0]}, Y: {pt[1]}")
-            # 結果画像には元の左上基準の矩形と中心点を描画
-            pt_left_top = (pt[0] - w // 2, pt[1] - h // 2)
-            cv2.rectangle(img_color, pt_left_top, (pt_left_top[0] + w, pt_left_top[1] + h), (0, 0, 255), 2)
-            cv2.circle(img_color, pt, 10, (0, 255, 0), 2)
+            # 結果画像には中心座標を基準に矩形と中心点を描画
+            pt_left_top = (int(pt[0] - w / 2.0), int(pt[1] - h / 2.0))
+            pt_right_bottom = (int(pt[0] + w / 2.0), int(pt[1] + h / 2.0))
+            cv2.rectangle(img_color, pt_left_top, pt_right_bottom, (0, 0, 255), 2)
+            cv2.circle(img_color, (int(pt[0]), int(pt[1])), 10, (0, 255, 0), 2)
     else:
         log.append("⚠️ マッチなし")
 
@@ -355,7 +357,7 @@ except Exception as e:
                 initialResultDiv.textContent = resultText;
             } else {
                 initialResultDiv.textContent = "キャラクターが見つかりませんでした。";
-                alert("キャラクターが見つかりませんでした。\nテンプレート画像がアップロードした画像内に存在するか確認してください。");
+                alert("キャラクターが見つかりませんでした。\nテ 🙂ンプレート画像がアップロードした画像内に存在するか確認してください。");
             }
         }
     </script>
