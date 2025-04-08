@@ -266,15 +266,22 @@ try:
 
     final_result_sorted = sorted(final_result, key=lambda x: x[0])
 
+    # テンプレート画像のサイズを取得
+    h, w = template.shape
+
+    # 中心座標に変換した結果を格納
+    final_result_centered = [(pt[0] + w // 2, pt[1] + h // 2) for pt in final_result_sorted]
+
     if final_result_sorted:
-        log.append("✅ マッチ箇所が見つかりました:")
+        log.append("✅ マッチ箇所が見つかりました（中心座標）:")
         if len(final_result_sorted) > 5:
             log.append("⚠️ マッチ箇所が多すぎます。閾値を調整するか、範囲を狭めてください。")
-        h, w = template.shape
-        for pt in final_result_sorted:
+        for pt in final_result_centered:
             log.append(f"X: {pt[0]}, Y: {pt[1]}")
-            cv2.rectangle(img_color, pt, (pt[0] + w, pt[1] + h), (0, 0, 255), 2)
-            cv2.circle(img_color, (pt[0] + w // 2, pt[1] + h // 2), 10, (0, 255, 0), 2)
+            # 結果画像には元の左上基準の矩形と中心点を描画
+            pt_left_top = (pt[0] - w // 2, pt[1] - h // 2)
+            cv2.rectangle(img_color, pt_left_top, (pt_left_top[0] + w, pt_left_top[1] + h), (0, 0, 255), 2)
+            cv2.circle(img_color, pt, 10, (0, 255, 0), 2)
     else:
         log.append("⚠️ マッチなし")
 
@@ -288,7 +295,7 @@ except Exception as e:
     log.append("❌ エラー: " + str(e))
     img_base64 = ""
 
-"\\n".join(log) + "\\n__SPLIT__\\n" + img_base64 + "\\n__SPLIT__\\n" + str(final_result_sorted)
+"\\n".join(log) + "\\n__SPLIT__\\n" + img_base64 + "\\n__SPLIT__\\n" + str(final_result_centered)
 `;
 
             try {
@@ -304,8 +311,8 @@ except Exception as e:
                     imgEl.src = "";
                 }
 
-                // 位置情報をパース
-                const positions = JSON.parse(positionsStr).map(pt => [pt[0], pt[1]]); // 中心位置の調整を削除
+                // 位置情報をパース（中心座標として受け取る）
+                const positions = JSON.parse(positionsStr);
                 return positions;
             } catch (err) {
                 console.error("Pyodide 実行エラー: ", err);
