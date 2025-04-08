@@ -233,6 +233,7 @@
 import cv2
 import numpy as np
 import base64
+import json
 
 log = []
 try:
@@ -268,7 +269,8 @@ try:
     h, w = template.shape
     log.append(f"テンプレート画像のサイズ: 幅={w}, 高さ={h}")
 
-    final_result_centered = [(pt[0] + w / 2.0, pt[1] + h / 2.0) for pt in final_result_sorted]
+    # 中心座標に変換（ピクセル中心を補正）
+    final_result_centered = [(pt[0] + w / 2.0, pt[1] + h / 2.0 + 0.5) for pt in final_result_sorted]
 
     if final_result_sorted:
         log.append("✅ マッチ箇所が見つかりました（中心座標）:")
@@ -292,15 +294,18 @@ try:
 except Exception as e:
     log.append("❌ エラー: " + str(e))
     img_base64 = ""
+    final_result_centered = []
 
-"\\n".join(log) + "\\n__SPLIT__\\n" + img_base64 + "\\n__SPLIT__\\n" + str(final_result_centered)
+positions_json = json.dumps(final_result_centered)
+
+"\\n".join(log) + "\\n__SPLIT__\\n" + img_base64 + "\\n__SPLIT__\\n" + positions_json
 `;
 
             try {
                 const result = await pyodide.runPythonAsync(pythonCode);
                 const [logText, imgBase64, positionsStr] = result.split("__SPLIT__");
                 console.log("Pyodide ログ: ", logText);
-                resultDiv.textContent = logText; // 処理ログを一時的に表示
+                resultDiv.textContent = logText;
 
                 if (imgBase64) {
                     imgEl.src = "data:image/png;base64," + imgBase64;
@@ -310,7 +315,14 @@ except Exception as e:
                     console.log("結果画像がありません");
                 }
 
-                const positions = JSON.parse(positionsStr);
+                console.log("パース前の positionsStr: ", positionsStr);
+                let positions;
+                try {
+                    positions = JSON.parse(positionsStr);
+                } catch (parseError) {
+                    console.error("JSON パースエラー: ", parseError);
+                    throw new Error("JSON パースエラー: " + parseError.message + "\npositionsStr: " + positionsStr);
+                }
                 console.log("パースされた位置: ", positions);
                 return positions;
             } catch (err) {
