@@ -63,9 +63,8 @@
 
     <canvas id="canvas"></canvas>
 
-    <!-- 結果画像を表示 -->
-    <h2>マッチ結果画像:</h2>
-    <img id="resultImage" src="" alt="マッチ結果がここに表示されます">
+    <!-- 結果画像を表示（デザインに影響を与えない位置） -->
+    <img id="resultImage" src="" alt="マッチ結果がここに表示されます" style="margin-top: 20px;">
 
     <script>
         // 簡易パスワード保護
@@ -309,7 +308,7 @@ except Exception as e:
                 }
 
                 // 位置情報をパース
-                const positions = JSON.parse(positionsStr).map(pt => [pt[0] + templateBytes.length / 2, pt[1] + templateBytes.length / 2]); // 中心位置を調整
+                const positions = JSON.parse(positionsStr).map(pt => [pt[0], pt[1]]); // 中心位置の調整を削除（テンプレート画像が変更されたため）
                 return positions;
             } catch (err) {
                 console.error("Pyodide 実行エラー: ", err);
