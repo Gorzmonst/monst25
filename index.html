@@ -23,12 +23,22 @@
             margin-top: 20px;
             font-size: 18px;
             white-space: pre-wrap;
+            text-align: left;
+            display: inline-block;
+        }
+        .result-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        .result-row span {
+            margin-right: 10px;
         }
         .button-container {
             margin: 10px 0;
         }
         button {
-            padding: 10px 20px;
+            padding: 5px 10px;
             margin: 5px;
         }
         input[type="number"] {
@@ -132,7 +142,6 @@
                     canvas.height = img.height;
                     ctx.drawImage(img, 0, 0);
                     console.log("画像がキャンバスに描画されました");
-                    // アラートを削除
                 };
                 img.onerror = function() {
                     console.log("画像の読み込みに失敗しました");
@@ -337,17 +346,37 @@ positions_json = json.dumps(final_result_centered)
             const resultDiv = document.getElementById('result');
             coordinates = {};
             if (positions && positions.length > 0) {
-                const resultText = positions.map((pos, i) => 
-                    `${i + 1}p : (${pos[0]}, ${pos[1]})`
-                ).join('\n');
-                resultDiv.textContent = resultText;
-                positions.forEach((pos, i) => coordinates[`${i + 1}P`] = pos);
-                console.log("結果が表示されました: ", resultText);
+                resultDiv.innerHTML = ''; // 既存の内容をクリア
+                positions.forEach((pos, i) => {
+                    const rowDiv = document.createElement('div');
+                    rowDiv.className = 'result-row';
+                    const label = `${i + 1}p : (${pos[0]}, ${pos[1]})`;
+                    const labelSpan = document.createElement('span');
+                    labelSpan.textContent = label;
+                    const copyButton = document.createElement('button');
+                    copyButton.textContent = 'コピー';
+                    copyButton.onclick = () => copyCoordinate(pos[0], pos[1]);
+                    rowDiv.appendChild(labelSpan);
+                    rowDiv.appendChild(copyButton);
+                    resultDiv.appendChild(rowDiv);
+                    coordinates[`${i + 1}P`] = pos;
+                });
+                console.log("結果が表示されました: ", positions);
             } else {
                 resultDiv.textContent = "キャラクターが見つかりませんでした。";
                 console.log("マッチする位置が見つかりませんでした");
                 alert("キャラクターが見つかりませんでした。\nテンプレート画像がアップロードした画像内に存在するか確認してください。");
             }
+        }
+
+        function copyCoordinate(x, y) {
+            const textToCopy = `${x}, ${y}`;
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                alert(`座標 (${textToCopy}) がクリップボードにコピーされました！`);
+            }).catch(err => {
+                console.error("クリップボードへのコピーに失敗しました: ", err);
+                alert("クリップボードへのコピーに失敗しました: " + err.message);
+            });
         }
 
         function displayInitialResults(positions) {
