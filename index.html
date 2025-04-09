@@ -96,6 +96,7 @@
         let uploadedImage = null;
         let coordinates = {};
         let templateBytes = null;
+        let csvData = {};
 
         const templateBase64 = "iVBORw0KGgoAAAANSUhEUgAAAA4AAAAwCAIAAACuWtxbAAAACXBIWXMAAAsTAAALEwEAmpwYAAADcElEQVRIiXWUzU4bSxCFz6mqbo89tnPFDcoVERs2WWSVB8hzRHnW7NhEyiuwiUDBJOJHIAIBd1dlMZ6xDdzWaBbT31RXnVNdvFqcpmacmsbu73l5yYsLnJ/Hz584PcVigcWCEXj3Du/f2z/tFMslrq/x6xeOj3FyEicnOD7G9+/x4wfPz2MyoRn29iy+fcNigbOz1fviAtfXcXPtNze4vZWHB87nMZtxZ8fi61ccHeHoCGcLXF7h7g61hrsTAAhAldNpzOdWvnzB1SWuruL2Fn/+oFZEAHCAQASEVFWaWT08DCIIBBBYr+ijkhRRVavooryw2KH9skoiAi/RHTrsWMxmeHzE42O4xzO0+6Jr9PdvlBLuvp1thw4/SPPpU/r4kW/fxmTiqhUoLz0VsNHnz8vDQ7+8LHd3tRSvdVCCgAAACqCAcW8vdnfrdFpyriqVQKxRB0SEk4lMpxa7u7GzU9u25FREfK3pSoGqyra1+dwiIshCVrIQ/kwEJcMMKVksl+FeI7r0n6NGhgjMDIHB9ArUbYfYlU86YORqK3oU27T2ellQwqzmXM0K+SQqAAM6ayxEPefaNCXnIvIcrX0B5hFQjZTcrJLlGVp67cyrg4Sqiw4oN9QdZDGSQTrp5AtliYQqzcTMVLWrvWwosFKKFBGmpDlrziYiATjgvSgbEYVmSIk5S0o2bAyx14qSkjNGI6QUqtZlP+i/iQapqmEWqqAYI7yHniQQvVUBgDAyYrvhn6B10JUM374YT/RfoyCCDLNqVillQ/0hakcbhJKzzWbSttVSgQxzZsi1ow1CmmnbyngcqqWbIIMCZBWppIMGd6hiNIqcXcQ3ZxcZOXM00pRUxOAOEaQEs64NhptIEeTMppGcRdRQVkX7RgUBBKGmHDfatjIahYihOvrtoV1WXaHCptHxmDkHxYLaWbDcsGDzz7WuAfH/cWszJRAWq7m0OnS4HgB0eyzY0PLDib52cnOG0oKMiFprqXXpvnQfLPBAjf7GEgbQI2opyw6NkO6ggMcq++EQakp5NsuTCVWHggKoZKhCFSQCgqCm1MxmuW1VlZtK9YMNJBAGQMysaZjzUuShbxQnTdXNoAqRCBgCFNGckfOjyP3QKKrZbIWSCJh7WNO0r1//e3Cw/+FD++ZNh0KkffXqv/393YODZj53978STunEdILQwwAAAABJRU5ErkJggg==";
 
@@ -115,11 +116,77 @@
             }
         }
 
-        loadPyodideAndPackages();
+        async function fetchCSV() {
+            const csvUrl = "https://raw.githubusercontent.com/Gorzmonst/monst25/main/initial-position_database_iphone16.csv";
+            try {
+                const response = await fetch(csvUrl);
+                if (!response.ok) {
+                    throw new Error(`CSVファイルのフェッチに失敗しました: ${response.statusText}`);
+                }
+                const csvText = await response.text();
+                parseCSV(csvText);
+            } catch (error) {
+                console.error("CSVファイルのフェッチに失敗しました: ", error);
+                alert("CSVファイルのフェッチに失敗しました。デフォルトデータを使用します。");
+                // フェッチに失敗した場合のデフォルトデータ（CSVの内容に合わせて更新）
+                csvData = {
+                    '239,1670': { initial_position: '1', string_to_show: 'A-1' },
+                    '239,1672': { initial_position: '2', string_to_show: 'A-2' },
+                    '239,1674': { initial_position: '3', string_to_show: 'A-3' },
+                    '239,1676': { initial_position: '4', string_to_show: 'A-4' },
+                    '239,1678': { initial_position: '5', string_to_show: 'A-5' },
+                    '239,1680': { initial_position: '6', string_to_show: 'A-6' },
+                    '239,1682': { initial_position: '7', string_to_show: 'A-7' },
+                    '239,1684': { initial_position: '8', string_to_show: 'A-8' },
+                    '239,1686': { initial_position: '9', string_to_show: 'A-9' }
+                };
+            }
+        }
 
-        window.onload = function() {
+        function parseCSV(csvText) {
+            console.log("parseCSV が呼び出されました");
+            csvData = {};
+            const lines = csvText.trim().split('\n');
+            const headers = lines[0].split(',').map(header => header.trim());
+
+            // CSVのヘッダーが期待通りか確認
+            if (headers[0] !== 'x' || headers[1] !== 'y' || headers[2] !== 'initial-position' || headers[3] !== 'named-position' || headers[4] !== 'position') {
+                alert("CSVファイルのヘッダーが正しくありません。期待されるヘッダー: x,y,initial-position,named-position,position");
+                // デフォルトデータにフォールバック
+                csvData = {
+                    '239,1670': { initial_position: '1', string_to_show: 'A-1' },
+                    '239,1672': { initial_position: '2', string_to_show: 'A-2' },
+                    '239,1674': { initial_position: '3', string_to_show: 'A-3' },
+                    '239,1676': { initial_position: '4', string_to_show: 'A-4' },
+                    '239,1678': { initial_position: '5', string_to_show: 'A-5' },
+                    '239,1680': { initial_position: '6', string_to_show: 'A-6' },
+                    '239,1682': { initial_position: '7', string_to_show: 'A-7' },
+                    '239,1684': { initial_position: '8', string_to_show: 'A-8' },
+                    '239,1686': { initial_position: '9', string_to_show: 'A-9' }
+                };
+                return;
+            }
+
+            // 2行目以降を処理
+            for (let i = 1; i < lines.length; i++) {
+                const row = lines[i].split(',').map(item => item.trim());
+                if (row.length < 5) continue; // 不正な行はスキップ
+                const x = parseInt(row[0]);
+                const y = parseInt(row[1]);
+                const initial_position = row[2]; // initial-position
+                const string_to_show = row[3];   // named-position
+                const key = `${x},${y}`;
+                csvData[key] = { initial_position, string_to_show };
+            }
+            console.log("CSVデータがパースされました: ", csvData);
+        }
+
+        // ページ読み込み時にPyodideとCSVをロード
+        window.onload = async function() {
             console.log("ページが読み込まれました");
             alert("ページが読み込まれました。");
+            await loadPyodideAndPackages();
+            await fetchCSV(); // CSVをフェッチ
         };
 
         function loadImage(event) {
@@ -188,7 +255,7 @@
 
         async function initialPositionCheck() {
             console.log("initialPositionCheck が呼び出されました");
-            alert("初期位置チェックが呼び出されました");
+            const initialResultDiv = document.getElementById('initialResult');
             if (!pyodideReady) {
                 console.log("pyodideReady: ", pyodideReady);
                 alert("Pyodide がまだ準備できていません。ページをリロードしてみてください。");
@@ -204,14 +271,18 @@
                 alert("テンプレート画像（Base64）が読み込まれていません。ページをリロードしてみてください。");
                 return;
             }
+            if (Object.keys(csvData).length === 0) {
+                console.log("CSVデータが読み込まれていません");
+                alert("CSVデータの読み込みに失敗しました。デフォルトデータを使用しています。");
+            }
 
             try {
                 const positions = await runMatching(true);
                 console.log("検出された位置: ", positions);
-                alert("検出された位置: " + JSON.stringify(positions));
                 displayInitialResults(positions);
             } catch (error) {
                 console.error("初期位置チェック中にエラーが発生しました: ", error);
+                initialResultDiv.textContent = "エラー: " + error.message;
                 alert("初期位置チェック中にエラーが発生しました: " + error.message + "\nスタック: " + error.stack);
             }
         }
@@ -382,10 +453,6 @@ positions_json = json.dumps(final_result_centered)
         function displayInitialResults(positions) {
             console.log("displayInitialResults が呼び出されました: ", positions);
             const initialResultDiv = document.getElementById('initialResult');
-            const csvData = {
-                '100,150': { initial_position: 'A', string_to_show: 'スタート地点' },
-                '200,300': { initial_position: 'B', string_to_show: '中間地点' }
-            };
             if (positions.length > 0) {
                 const resultText = positions.map((pos, i) => {
                     const key = `${pos[0]},${pos[1]}`;
